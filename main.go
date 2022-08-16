@@ -80,7 +80,7 @@ func exifGetVal(file, exifKey string) string {
 
 func exifIsMatch(file, exifKey, exifVal string) bool {
 	if exists(filepath.Join(dstDir, filepath.Base(file))) {
-		log.Printf("Skipping exif lookup (file already in dst): %v", filepath.Base(file))
+		log.Printf("Skipping EXIF lookup (file already in dst): %v", filepath.Base(file))
 		return false
 	}
 

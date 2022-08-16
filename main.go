@@ -80,12 +80,12 @@ func exifIsMatch(file string, exifKey string, exifVal string) bool {
 		return false
 	}
 
-	x, err := exifGetVal(file, exifKey)
+	val, err := exifGetVal(file, exifKey)
 	if err != nil {
 		log.Printf("%v: %v", filepath.Base(file), err)
 	}
 
-	return x == exifVal
+	return val == exifVal
 }
 
 func main() {

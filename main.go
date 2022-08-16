@@ -39,6 +39,8 @@ func copyFile(src, dst string) {
 		return
 	}
 
+	log.Printf("Copying: %v", filepath.Base(src))
+
 	r, err := os.Open(src)
 	check(err)
 	defer r.Close()
@@ -55,8 +57,12 @@ func find(rootDir, fileExt string) []string {
 
 	filepath.WalkDir(rootDir, func(s string, d fs.DirEntry, err error) error {
 		check(err)
-		if filepath.Ext(d.Name()) == fileExt {
-			files = append(files, s)
+		if d.IsDir() {
+			log.Printf("Scanning %v\n", d)
+		} else {
+			if filepath.Ext(d.Name()) == fileExt {
+				files = append(files, s)
+			}
 		}
 
 		return nil
@@ -65,18 +71,15 @@ func find(rootDir, fileExt string) []string {
 	return files
 }
 
-func exifGetVal(file, exifKey string) (string, error) {
+func exifGetVal(file, exifKey string) string {
 	et, err := exiftool.NewExiftool()
 	check(err)
 	defer et.Close()
 
 	f := et.ExtractMetadata(file)
-	val, err := f[0].GetString(exifKey)
-	if err != nil {
-		return "", err
-	}
+	val, _ := f[0].GetString(exifKey)
 
-	return val, nil
+	return val
 }
 
 func exifIsMatch(file, exifKey, exifVal string) bool {
@@ -85,11 +88,7 @@ func exifIsMatch(file, exifKey, exifVal string) bool {
 		return false
 	}
 
-	val, err := exifGetVal(file, exifKey)
-	if err != nil {
-		log.Printf("%v: %v", filepath.Base(file), err)
-	}
-
+	val := exifGetVal(file, exifKey)
 	return contains(val, exifVal)
 }
 

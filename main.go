@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/barasher/go-exiftool"
 )
@@ -28,7 +29,11 @@ func exists(file string) bool {
 	return err == nil
 }
 
-func copyFile(src string, dst string) {
+func contains(str, substr string) bool {
+	return strings.Contains(str, substr)
+}
+
+func copyFile(src, dst string) {
 	if exists(dst) {
 		log.Printf("Skipping copy (file already in dst): %v", filepath.Base(src))
 		return
@@ -60,7 +65,7 @@ func find(rootDir, fileExt string) []string {
 	return files
 }
 
-func exifGetVal(file string, exifKey string) (string, error) {
+func exifGetVal(file, exifKey string) (string, error) {
 	et, err := exiftool.NewExiftool()
 	check(err)
 	defer et.Close()
@@ -74,7 +79,7 @@ func exifGetVal(file string, exifKey string) (string, error) {
 	return val, nil
 }
 
-func exifIsMatch(file string, exifKey string, exifVal string) bool {
+func exifIsMatch(file, exifKey, exifVal string) bool {
 	if exists(filepath.Join(dstDir, filepath.Base(file))) {
 		log.Printf("Skipping exif lookup (file already in dst): %v", filepath.Base(file))
 		return false
@@ -85,7 +90,7 @@ func exifIsMatch(file string, exifKey string, exifVal string) bool {
 		log.Printf("%v: %v", filepath.Base(file), err)
 	}
 
-	return val == exifVal
+	return contains(val, exifVal)
 }
 
 func main() {

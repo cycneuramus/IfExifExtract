@@ -57,12 +57,8 @@ func find(rootDir, fileExt string) []string {
 
 	filepath.WalkDir(rootDir, func(s string, d fs.DirEntry, err error) error {
 		check(err)
-		if d.IsDir() {
-			log.Printf("Scanning %v\n", d)
-		} else {
-			if filepath.Ext(d.Name()) == fileExt {
-				files = append(files, s)
-			}
+		if filepath.Ext(d.Name()) == fileExt {
+			files = append(files, s)
 		}
 
 		return nil
@@ -93,6 +89,8 @@ func exifIsMatch(file, exifKey, exifVal string) bool {
 }
 
 func main() {
+	log.Printf("Scanning %v...\n", srcDir)
+
 	for _, ext := range fileExts {
 		for _, file := range find(srcDir, ext) {
 			if exifIsMatch(file, exifKey, exifVal) {
@@ -101,4 +99,6 @@ func main() {
 			}
 		}
 	}
+
+	log.Printf("Scan complete")
 }

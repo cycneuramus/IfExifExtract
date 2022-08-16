@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	exifKey  = "Subject"
-	exifVal  = os.Getenv("EXIF_VAL")
 	srcDir   = os.Getenv("SRC_DIR")
 	dstDir   = os.Getenv("DST_DIR")
+	exifKey  = os.Getenv("EXIF_KEY")
+	exifVal  = os.Getenv("EXIF_VAL")
 	fileExts = []string{".jpg", ".jpeg"}
 )
 

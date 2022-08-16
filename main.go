@@ -70,7 +70,6 @@ func find(rootDir, fileExt string) []string {
 func exifGetVal(file, exifKey string) string {
 	et, err := exiftool.NewExiftool()
 	check(err)
-	defer et.Close()
 
 	f := et.ExtractMetadata(file)
 	val, _ := f[0].GetString(exifKey)

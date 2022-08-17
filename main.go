@@ -56,17 +56,17 @@ func copyFile(src, dst string) {
 func find(rootDir string, fileExt []string) []string {
 	var files []string
 
-	filepath.WalkDir(rootDir, func(s string, d fs.DirEntry, err error) error {
+	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
 		check(err)
 		for _, ext := range fileExt {
-			if filepath.Ext(d.Name()) == ext {
-				files = append(files, s)
+			if filepath.Ext(xinfo.Name()) == ext {
+				files = append(files, xpath)
 			}
 		}
-
 		return nil
-	})
+	}
 
+	filepath.WalkDir(rootDir, walker)
 	return files
 }
 
@@ -76,6 +76,7 @@ func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
 		return ""
 	}
 
+	log.Printf("Checking: %v", filepath.Base(file))
 	f := et.ExtractMetadata(file)
 	val, _ := f[0].GetString(exifKey)
 
@@ -84,7 +85,7 @@ func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
 
 func main() {
 	start := time.Now()
-	log.Printf("Scanning %v...\n", srcDir)
+	log.Printf("Scanning %v...", srcDir)
 
 	et, err := exiftool.NewExiftool()
 	check(err)

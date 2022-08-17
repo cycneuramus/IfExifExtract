@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/barasher/go-exiftool"
@@ -19,10 +20,20 @@ var (
 	fileExts = []string{".jpg", ".jpeg"}
 )
 
-func check(e error) {
-	if e != nil {
-		log.Fatal(e)
-	}
+func pathBase(p string) string {
+	return filepath.Base(p)
+}
+
+func pathJoin(p1, p2 string) string {
+	return filepath.Join(p1, p2)
+}
+
+func pathExt(p string) string {
+	return filepath.Ext(p)
+}
+
+func contains(str, substr string) bool {
+	return strings.Contains(str, substr)
 }
 
 func exists(file string) bool {
@@ -30,17 +41,19 @@ func exists(file string) bool {
 	return err == nil
 }
 
-func contains(str, substr string) bool {
-	return strings.Contains(str, substr)
+func check(e error) {
+	if e != nil {
+		log.Fatal(e)
+	}
 }
 
 func copyFile(src, dst string) {
 	if exists(dst) {
-		log.Printf("Skipping copy (file already in dst): %v", filepath.Base(src))
+		log.Printf("Skipping copy (file already in dst): %v", pathBase(src))
 		return
 	}
 
-	log.Printf("Copying: %v", filepath.Base(src))
+	log.Printf("Copying: %v", pathBase(src))
 
 	r, err := os.Open(src)
 	check(err)
@@ -53,13 +66,13 @@ func copyFile(src, dst string) {
 	w.ReadFrom(r)
 }
 
-func find(rootDir string, fileExt []string) []string {
+func find(rootDir string, fileExts []string) []string {
 	var files []string
 
 	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
 		check(err)
-		for _, ext := range fileExt {
-			if filepath.Ext(xinfo.Name()) == ext {
+		for _, ext := range fileExts {
+			if pathExt(xinfo.Name()) == ext {
 				files = append(files, xpath)
 			}
 		}
@@ -71,16 +84,30 @@ func find(rootDir string, fileExt []string) []string {
 }
 
 func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
-	if exists(filepath.Join(dstDir, filepath.Base(file))) {
-		log.Printf("Skipping EXIF lookup (file already in dst): %v", filepath.Base(file))
+	if exists(pathJoin(dstDir, pathBase(file))) {
+		log.Printf("Skipping EXIF lookup (file already in dst): %v", pathBase(file))
 		return ""
 	}
 
-	log.Printf("EXIF lookup: %v", filepath.Base(file))
 	f := et.ExtractMetadata(file)
-	val, _ := f[0].GetString(exifKey)
+
+	val, err := f[0].GetString(exifKey)
+	if err != nil {
+		log.Printf("exifGetVal: %v: %v", pathBase(file), err)
+	}
 
 	return val
+}
+
+func extract(file, dstDir string, et *exiftool.Exiftool, wg *sync.WaitGroup) {
+	val := exifGetVal(file, exifKey, et)
+
+	if contains(val, exifVal) {
+		dst := pathJoin(dstDir, pathBase(file))
+		copyFile(file, dst)
+	}
+
+	wg.Done()
 }
 
 func main() {
@@ -91,13 +118,13 @@ func main() {
 	check(err)
 	defer et.Close()
 
+	var wg sync.WaitGroup
+
 	for _, file := range find(srcDir, fileExts) {
-		val := exifGetVal(file, exifKey, et)
-		if contains(val, exifVal) {
-			dst := filepath.Join(dstDir, filepath.Base(file))
-			copyFile(file, dst)
-		}
+		wg.Add(1)
+		go extract(file, dstDir, et, &wg)
 	}
+	wg.Wait()
 
 	log.Printf("Scan complete in %v seconds", time.Since(start))
 }

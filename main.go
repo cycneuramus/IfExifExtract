@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/barasher/go-exiftool"
 )
@@ -52,13 +53,15 @@ func copyFile(src, dst string) {
 	w.ReadFrom(r)
 }
 
-func find(rootDir, fileExt string) []string {
+func find(rootDir string, fileExt []string) []string {
 	var files []string
 
 	filepath.WalkDir(rootDir, func(s string, d fs.DirEntry, err error) error {
 		check(err)
-		if filepath.Ext(d.Name()) == fileExt {
-			files = append(files, s)
+		for _, ext := range fileExt {
+			if filepath.Ext(d.Name()) == ext {
+				files = append(files, s)
+			}
 		}
 
 		return nil
@@ -67,10 +70,11 @@ func find(rootDir, fileExt string) []string {
 	return files
 }
 
-func exifGetVal(file, exifKey string) string {
-	et, err := exiftool.NewExiftool()
-	check(err)
-	defer et.Close()
+func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
+	if exists(filepath.Join(dstDir, filepath.Base(file))) {
+		log.Printf("Skipping EXIF lookup (file already in dst): %v", filepath.Base(file))
+		return ""
+	}
 
 	f := et.ExtractMetadata(file)
 	val, _ := f[0].GetString(exifKey)
@@ -78,27 +82,21 @@ func exifGetVal(file, exifKey string) string {
 	return val
 }
 
-func exifIsMatch(file, exifKey, exifVal string) bool {
-	if exists(filepath.Join(dstDir, filepath.Base(file))) {
-		log.Printf("Skipping EXIF lookup (file already in dst): %v", filepath.Base(file))
-		return false
-	}
-
-	val := exifGetVal(file, exifKey)
-	return contains(val, exifVal)
-}
-
 func main() {
+	start := time.Now()
 	log.Printf("Scanning %v...\n", srcDir)
 
-	for _, ext := range fileExts {
-		for _, file := range find(srcDir, ext) {
-			if exifIsMatch(file, exifKey, exifVal) {
-				dst := filepath.Join(dstDir, filepath.Base(file))
-				copyFile(file, dst)
-			}
+	et, err := exiftool.NewExiftool()
+	check(err)
+	defer et.Close()
+
+	for _, file := range find(srcDir, fileExts) {
+		val := exifGetVal(file, exifKey, et)
+		if contains(val, exifVal) {
+			dst := filepath.Join(dstDir, filepath.Base(file))
+			copyFile(file, dst)
 		}
 	}
 
-	log.Printf("Scan complete")
+	log.Printf("Scan complete in %v seconds", time.Since(start))
 }

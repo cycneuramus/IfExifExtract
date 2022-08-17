@@ -76,7 +76,7 @@ func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
 		return ""
 	}
 
-	log.Printf("Checking: %v", filepath.Base(file))
+	log.Printf("EXIF lookup: %v", filepath.Base(file))
 	f := et.ExtractMetadata(file)
 	val, _ := f[0].GetString(exifKey)
 

@@ -12,14 +12,6 @@ import (
 	"github.com/barasher/go-exiftool"
 )
 
-var (
-	srcDir   = os.Getenv("SRC_DIR")
-	dstDir   = os.Getenv("DST_DIR")
-	exifKey  = os.Getenv("EXIF_KEY")
-	exifVal  = os.Getenv("EXIF_VAL")
-	fileExts = []string{".jpg", ".jpeg"}
-)
-
 func pathBase(p string) string {
 	return filepath.Base(p)
 }
@@ -83,34 +75,45 @@ func find(rootDir string, fileExts []string) []string {
 	return files
 }
 
-func exifGetVal(file, exifKey string, et *exiftool.Exiftool) string {
+func exifGetVal(file, exifKey, dstDir string, et *exiftool.Exiftool, valChan chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	if exists(pathJoin(dstDir, pathBase(file))) {
 		log.Printf("Skipping EXIF lookup (file already in dst): %v", pathBase(file))
-		return ""
+		valChan <- ""
 	}
 
 	f := et.ExtractMetadata(file)
-
 	val, err := f[0].GetString(exifKey)
 	if err != nil {
 		log.Printf("exifGetVal: %v: %v", pathBase(file), err)
 	}
 
-	return val
+	valChan <- val
 }
 
-func extract(file, dstDir string, et *exiftool.Exiftool, wg *sync.WaitGroup) {
-	val := exifGetVal(file, exifKey, et)
+func extractOnMatch(file, exifVal, dstDir string, valChan chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
 
+	val := <-valChan
 	if contains(val, exifVal) {
 		dst := pathJoin(dstDir, pathBase(file))
 		copyFile(file, dst)
 	}
-
-	wg.Done()
 }
 
 func main() {
+	var (
+		srcDir      = os.Getenv("SRC_DIR")
+		dstDir      = os.Getenv("DST_DIR")
+		exifWantKey = os.Getenv("EXIF_KEY")
+		exifWantVal = os.Getenv("EXIF_VAL")
+		fileExts    = []string{".jpg", ".jpeg"}
+
+		valChan = make(chan string)
+		wg      sync.WaitGroup
+	)
+
 	start := time.Now()
 	log.Printf("Scanning %v...", srcDir)
 
@@ -118,11 +121,12 @@ func main() {
 	check(err)
 	defer et.Close()
 
-	var wg sync.WaitGroup
+	files := find(srcDir, fileExts)
 
-	for _, file := range find(srcDir, fileExts) {
-		wg.Add(1)
-		go extract(file, dstDir, et, &wg)
+	for _, file := range files {
+		wg.Add(2)
+		go exifGetVal(file, exifWantKey, dstDir, et, valChan, &wg)
+		go extractOnMatch(file, exifWantVal, dstDir, valChan, &wg)
 	}
 	wg.Wait()
 

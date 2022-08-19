@@ -49,9 +49,9 @@ func exists(file string) bool {
 	return err == nil
 }
 
-func check(e error) {
-	if e != nil {
-		log.Fatal(e)
+func check(err error) {
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -81,8 +81,8 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 		return
 	}
 
-	f := et.ExtractMetadata(img.file)
-	val, err := f[0].GetString(img.exifKey)
+	e := et.ExtractMetadata(img.file)
+	val, err := e[0].GetString(img.exifKey)
 	if err != nil {
 		log.Printf("exifGetVal: %v: %v", pathBase(img.file), err)
 	}

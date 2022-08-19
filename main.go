@@ -93,7 +93,7 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	imgChan <- img
 }
 
-func exifIsMatch(dstDir string, imgChan <-chan Image, copyChan chan<- Image, wg *sync.WaitGroup) {
+func exifIsMatch(dstDir string, imgChan <-chan Image, extractChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
@@ -101,13 +101,13 @@ func exifIsMatch(dstDir string, imgChan <-chan Image, copyChan chan<- Image, wg 
 		img.exifIsMatch = true
 	}
 
-	copyChan <- img
+	extractChan <- img
 }
 
-func extractMatch(dstDir string, copyChan <-chan Image, wg *sync.WaitGroup) {
+func extractMatch(dstDir string, extractChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	img := <-copyChan
+	img := <-extractChan
 	if !img.exifIsMatch {
 		return
 	}
@@ -139,9 +139,9 @@ func main() {
 		exifValWant = os.Getenv("EXIF_VAL")
 		fileExts    = []string{".jpg", ".jpeg"}
 
-		imgChan  = make(chan Image)
-		copyChan = make(chan Image)
-		wg       sync.WaitGroup
+		imgChan     = make(chan Image)
+		extractChan = make(chan Image)
+		wg          sync.WaitGroup
 	)
 
 	start := time.Now()
@@ -156,8 +156,8 @@ func main() {
 
 		wg.Add(3)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)
-		go exifIsMatch(dstDir, imgChan, copyChan, &wg)
-		go extractMatch(dstDir, copyChan, &wg)
+		go exifIsMatch(dstDir, imgChan, extractChan, &wg)
+		go extractMatch(dstDir, extractChan, &wg)
 	}
 
 	wg.Wait()

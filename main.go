@@ -110,11 +110,11 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	imgChan <- img
 }
 
-func extractOnMatch(exifValFound, dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
+func extractOnMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
-	if img.exifValFound != "" && contains(img.exifValFound, exifValFound) {
+	if img.exifValFound != "" && contains(img.exifValFound, img.exifValWant) {
 		dst := pathJoin(dstDir, pathBase(img.file))
 		go copyFile(img.file, dst)
 	}
@@ -143,7 +143,7 @@ func main() {
 		wg.Add(2)
 		img := newImg(file, exifKey, exifValWant, "")
 		go exifGetVal(img, dstDir, et, imgChan, &wg)
-		go extractOnMatch(exifValWant, dstDir, imgChan, &wg)
+		go extractOnMatch(dstDir, imgChan, &wg)
 		wg.Wait()
 	}
 

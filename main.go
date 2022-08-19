@@ -17,14 +17,16 @@ type Image struct {
 	exifKey      string
 	exifValWant  string
 	exifValFound string
+	exifIsMatch  bool
 }
 
-func newImg(file, exifKey, exifValWant, exifValFound string) Image {
+func newImg(file, exifKey, exifValWant string) Image {
 	return Image{
 		file:         file,
 		exifKey:      exifKey,
 		exifValWant:  exifValWant,
-		exifValFound: exifValFound,
+		exifValFound: "",
+		exifIsMatch:  false,
 	}
 }
 
@@ -72,25 +74,6 @@ func find(rootDir string, fileExts []string) []string {
 	return files
 }
 
-func copyFile(src, dst string) {
-	if exists(dst) {
-		log.Printf("copyFile: Skipping copy (file already in dst): %v", pathBase(src))
-		return
-	}
-
-	log.Printf("Copying: %v", pathBase(src))
-
-	r, err := os.Open(src)
-	check(err)
-	defer r.Close()
-
-	w, err := os.Create(dst)
-	check(err)
-	defer w.Close()
-
-	w.ReadFrom(r)
-}
-
 func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -105,19 +88,47 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	if err != nil {
 		log.Printf("exifGetVal: %v: %v", pathBase(img.file), err)
 	}
-	img.exifValFound = val
 
+	img.exifValFound = val
 	imgChan <- img
 }
 
-func extractOnMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
+func exifIsMatch(dstDir string, imgChan <-chan Image, copyChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
 	if img.exifValFound != "" && contains(img.exifValFound, img.exifValWant) {
-		dst := pathJoin(dstDir, pathBase(img.file))
-		go copyFile(img.file, dst)
+		img.exifIsMatch = true
 	}
+
+	copyChan <- img
+}
+
+func extractMatch(dstDir string, copyChan <-chan Image, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	img := <-copyChan
+	if !img.exifIsMatch {
+		return
+	}
+
+	dst := pathJoin(dstDir, pathBase(img.file))
+	if exists(dst) {
+		log.Printf("copyFile: Skipping copy (file already in dst): %v", pathBase(img.file))
+		return
+	}
+
+	log.Printf("Copying: %v", pathBase(img.file))
+
+	r, err := os.Open(img.file)
+	check(err)
+	defer r.Close()
+
+	w, err := os.Create(dst)
+	check(err)
+	defer w.Close()
+
+	w.ReadFrom(r)
 }
 
 func main() {
@@ -128,8 +139,9 @@ func main() {
 		exifValWant = os.Getenv("EXIF_VAL")
 		fileExts    = []string{".jpg", ".jpeg"}
 
-		imgChan = make(chan Image)
-		wg      sync.WaitGroup
+		imgChan  = make(chan Image)
+		copyChan = make(chan Image)
+		wg       sync.WaitGroup
 	)
 
 	start := time.Now()
@@ -140,12 +152,14 @@ func main() {
 	defer et.Close()
 
 	for _, file := range find(srcDir, fileExts) {
-		wg.Add(2)
-		img := newImg(file, exifKey, exifValWant, "")
+		img := newImg(file, exifKey, exifValWant)
+
+		wg.Add(3)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)
-		go extractOnMatch(dstDir, imgChan, &wg)
-		wg.Wait()
+		go exifIsMatch(dstDir, imgChan, copyChan, &wg)
+		go extractMatch(dstDir, copyChan, &wg)
 	}
 
-	log.Printf("Scan complete in %v seconds", time.Since(start))
+	wg.Wait()
+	log.Printf("Scan completed in %v seconds", time.Since(start))
 }

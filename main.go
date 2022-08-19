@@ -74,7 +74,7 @@ func find(rootDir string, fileExts []string) []string {
 
 func copyFile(src, dst string) {
 	if exists(dst) {
-		log.Printf("Skipping copy (file already in dst): %v", pathBase(src))
+		log.Printf("copyFile: Skipping copy (file already in dst): %v", pathBase(src))
 		return
 	}
 
@@ -95,7 +95,7 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	defer wg.Done()
 
 	if exists(pathJoin(dstDir, pathBase(img.file))) {
-		log.Printf("Skipping EXIF lookup (file already in dst): %v", pathBase(img.file))
+		log.Printf("exifGetVal: Skipping EXIF lookup (file already in dst): %v", pathBase(img.file))
 		imgChan <- img
 		return
 	}

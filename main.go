@@ -17,7 +17,6 @@ type Image struct {
 	exifKey      string
 	exifValWant  string
 	exifValFound string
-	exifIsMatch  bool
 }
 
 func newImg(file, exifKey, exifValWant string) Image {
@@ -26,7 +25,6 @@ func newImg(file, exifKey, exifValWant string) Image {
 		exifKey:      exifKey,
 		exifValWant:  exifValWant,
 		exifValFound: "",
-		exifIsMatch:  false,
 	}
 }
 
@@ -93,32 +91,21 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	imgChan <- img
 }
 
-func exifIsMatch(dstDir string, imgChan <-chan Image, extractChan chan<- Image, wg *sync.WaitGroup) {
+func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
-	if img.exifValFound != "" && contains(img.exifValFound, img.exifValWant) {
-		img.exifIsMatch = true
-	}
-
-	extractChan <- img
-}
-
-func extractMatch(dstDir string, extractChan <-chan Image, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	img := <-extractChan
-	if !img.exifIsMatch {
+	if !contains(img.exifValFound, img.exifValWant) {
 		return
 	}
 
 	dst := pathJoin(dstDir, pathBase(img.file))
 	if exists(dst) {
-		log.Printf("copyFile: Skipping copy (file already in dst): %v", pathBase(img.file))
+		log.Printf("extractMatch: Skipping (already in dst): %v", pathBase(img.file))
 		return
 	}
 
-	log.Printf("Copying: %v", pathBase(img.file))
+	log.Printf("extractMatch: Extracting %v", pathBase(img.file))
 
 	r, err := os.Open(img.file)
 	check(err)
@@ -139,9 +126,8 @@ func main() {
 		exifValWant = os.Getenv("EXIF_VAL")
 		fileExts    = []string{".jpg", ".jpeg"}
 
-		imgChan     = make(chan Image)
-		extractChan = make(chan Image)
-		wg          sync.WaitGroup
+		imgChan = make(chan Image)
+		wg      sync.WaitGroup
 	)
 
 	start := time.Now()
@@ -154,10 +140,9 @@ func main() {
 	for _, file := range find(srcDir, fileExts) {
 		img := newImg(file, exifKey, exifValWant)
 
-		wg.Add(3)
+		wg.Add(2)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)
-		go exifIsMatch(dstDir, imgChan, extractChan, &wg)
-		go extractMatch(dstDir, extractChan, &wg)
+		go extractMatch(dstDir, imgChan, &wg)
 	}
 
 	wg.Wait()

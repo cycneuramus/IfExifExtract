@@ -19,15 +19,6 @@ type Image struct {
 	exifValFound string
 }
 
-func newImg(file, exifKey, exifValWant string) Image {
-	return Image{
-		file:         file,
-		exifKey:      exifKey,
-		exifValWant:  exifValWant,
-		exifValFound: "",
-	}
-}
-
 func pathBase(p string) string {
 	return filepath.Base(p)
 }
@@ -138,7 +129,7 @@ func main() {
 	defer et.Close()
 
 	for _, file := range find(srcDir, fileExts) {
-		img := newImg(file, exifKey, exifValWant)
+		img := Image{file, exifKey, exifValWant, ""}
 
 		wg.Add(2)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)

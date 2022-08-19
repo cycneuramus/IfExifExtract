@@ -13,18 +13,18 @@ import (
 )
 
 type Image struct {
-	file          string
-	exifKey       string
-	exifTargetVal string
-	exifFoundVal  string
+	file         string
+	exifKey      string
+	exifValWant  string
+	exifValFound string
 }
 
-func newImg(file, exifKey, exifTargetVal, exifFoundVal string) Image {
+func newImg(file, exifKey, exifValWant, exifValFound string) Image {
 	return Image{
-		file:          file,
-		exifKey:       exifKey,
-		exifTargetVal: exifTargetVal,
-		exifFoundVal:  exifFoundVal,
+		file:         file,
+		exifKey:      exifKey,
+		exifValWant:  exifValWant,
+		exifValFound: exifValFound,
 	}
 }
 
@@ -55,6 +55,23 @@ func check(e error) {
 	}
 }
 
+func find(rootDir string, fileExts []string) []string {
+	var files []string
+
+	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
+		check(err)
+		for _, ext := range fileExts {
+			if pathExt(xinfo.Name()) == ext {
+				files = append(files, xpath)
+			}
+		}
+		return nil
+	}
+
+	filepath.WalkDir(rootDir, walker)
+	return files
+}
+
 func copyFile(src, dst string) {
 	if exists(dst) {
 		log.Printf("Skipping copy (file already in dst): %v", pathBase(src))
@@ -74,23 +91,6 @@ func copyFile(src, dst string) {
 	w.ReadFrom(r)
 }
 
-func find(rootDir string, fileExts []string) []string {
-	var files []string
-
-	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
-		check(err)
-		for _, ext := range fileExts {
-			if pathExt(xinfo.Name()) == ext {
-				files = append(files, xpath)
-			}
-		}
-		return nil
-	}
-
-	filepath.WalkDir(rootDir, walker)
-	return files
-}
-
 func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -105,16 +105,16 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 	if err != nil {
 		log.Printf("exifGetVal: %v: %v", pathBase(img.file), err)
 	}
-	img.exifFoundVal = val
+	img.exifValFound = val
 
 	imgChan <- img
 }
 
-func extractOnMatch(exifFoundVal, dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
+func extractOnMatch(exifValFound, dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
-	if img.exifFoundVal != "" && contains(img.exifFoundVal, exifFoundVal) {
+	if img.exifValFound != "" && contains(img.exifValFound, exifValFound) {
 		dst := pathJoin(dstDir, pathBase(img.file))
 		go copyFile(img.file, dst)
 	}
@@ -122,11 +122,11 @@ func extractOnMatch(exifFoundVal, dstDir string, imgChan <-chan Image, wg *sync.
 
 func main() {
 	var (
-		srcDir        = os.Getenv("SRC_DIR")
-		dstDir        = os.Getenv("DST_DIR")
-		exifKey       = os.Getenv("EXIF_KEY")
-		exifTargetVal = os.Getenv("EXIF_VAL")
-		fileExts      = []string{".jpg", ".jpeg"}
+		srcDir      = os.Getenv("SRC_DIR")
+		dstDir      = os.Getenv("DST_DIR")
+		exifKey     = os.Getenv("EXIF_KEY")
+		exifValWant = os.Getenv("EXIF_VAL")
+		fileExts    = []string{".jpg", ".jpeg"}
 
 		imgChan = make(chan Image)
 		wg      sync.WaitGroup
@@ -141,9 +141,9 @@ func main() {
 
 	for _, file := range find(srcDir, fileExts) {
 		wg.Add(2)
-		img := newImg(file, exifKey, exifTargetVal, "")
+		img := newImg(file, exifKey, exifValWant, "")
 		go exifGetVal(img, dstDir, et, imgChan, &wg)
-		go extractOnMatch(exifTargetVal, dstDir, imgChan, &wg)
+		go extractOnMatch(exifValWant, dstDir, imgChan, &wg)
 		wg.Wait()
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/fs"
 	"log"
 	"os"
@@ -44,14 +45,30 @@ func contains(str, substr string) bool {
 	return strings.Contains(str, substr)
 }
 
-func exists(file string) bool {
-	_, err := os.Open(file)
-	return err == nil
-}
-
 func check(err error) {
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return !errors.Is(err, os.ErrNotExist)
+}
+
+func validateExists(dirs ...string) {
+	for _, dir := range dirs {
+		if !exists(dir) {
+			log.Fatalf("Not found: %v", dir)
+		}
+	}
+}
+
+func validateIsSet(vars ...string) {
+	for _, v := range vars {
+		if v == "" {
+			log.Fatalf("Not set: %v", v)
+		}
 	}
 }
 
@@ -130,12 +147,15 @@ func main() {
 		wg      sync.WaitGroup
 	)
 
-	start := time.Now()
-	log.Printf("Scanning %v...", srcDir)
+	validateIsSet(srcDir, dstDir, exifKey, exifValWant)
+	validateExists(srcDir, dstDir)
 
 	et, err := exiftool.NewExiftool()
 	check(err)
 	defer et.Close()
+
+	start := time.Now()
+	log.Printf("Scanning %v...", srcDir)
 
 	for _, file := range find(srcDir, fileExts) {
 		img := newImg(file, exifKey, exifValWant)
@@ -146,5 +166,5 @@ func main() {
 	}
 
 	wg.Wait()
-	log.Printf("Scan completed in %v seconds", time.Since(start))
+	log.Printf("Scan completed in %v", time.Since(start))
 }

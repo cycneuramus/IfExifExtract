@@ -56,10 +56,10 @@ func exists(path string) bool {
 	return !errors.Is(err, os.ErrNotExist)
 }
 
-func validateExists(dirs ...string) {
-	for _, dir := range dirs {
-		if !exists(dir) {
-			log.Fatalf("Not found: %v", dir)
+func validateExists(paths ...string) {
+	for _, p := range paths {
+		if !exists(p) {
+			log.Fatalf("Not found: %v", p)
 		}
 	}
 }

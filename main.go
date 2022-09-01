@@ -20,7 +20,7 @@ type Image struct {
 	exifValFound string
 }
 
-func newImg(file, exifKey, exifValWant string) Image {
+func newImage(file, exifKey, exifValWant string) Image {
 	return Image{
 		file:         file,
 		exifKey:      exifKey,
@@ -29,15 +29,15 @@ func newImg(file, exifKey, exifValWant string) Image {
 	}
 }
 
-func pathBase(p string) string {
-	return filepath.Base(p)
-}
-
-func pathJoin(p1, p2 string) string {
+func joinPath(p1, p2 string) string {
 	return filepath.Join(p1, p2)
 }
 
-func pathExt(p string) string {
+func getPathBase(p string) string {
+	return filepath.Base(p)
+}
+
+func getFileExt(p string) string {
 	return filepath.Ext(p)
 }
 
@@ -78,7 +78,7 @@ func find(rootDir string, fileExts []string) []string {
 	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
 		check(err)
 		for _, ext := range fileExts {
-			if pathExt(xinfo.Name()) == ext {
+			if getFileExt(xinfo.Name()) == ext {
 				files = append(files, xpath)
 			}
 		}
@@ -92,16 +92,16 @@ func find(rootDir string, fileExts []string) []string {
 func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if exists(pathJoin(dstDir, pathBase(img.file))) {
-		log.Printf("exifGetVal: Skipping EXIF lookup (file already in dst): %v", pathBase(img.file))
+	if exists(joinPath(dstDir, getPathBase(img.file))) {
+		log.Printf("exifGetVal: Skipping EXIF lookup (file already in dst): %v", getPathBase(img.file))
 		imgChan <- img
 		return
 	}
 
-	e := et.ExtractMetadata(img.file)
-	val, err := e[0].GetString(img.exifKey)
+	exif := et.ExtractMetadata(img.file)
+	val, err := exif[0].GetString(img.exifKey)
 	if err != nil {
-		log.Printf("exifGetVal: %v: %v", pathBase(img.file), err)
+		log.Printf("exifGetVal: %v: %v", getPathBase(img.file), err)
 	}
 
 	img.exifValFound = val
@@ -116,13 +116,13 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 		return
 	}
 
-	dst := pathJoin(dstDir, pathBase(img.file))
+	dst := joinPath(dstDir, getPathBase(img.file))
 	if exists(dst) {
-		log.Printf("extractMatch: Skipping (already in dst): %v", pathBase(img.file))
+		log.Printf("extractMatch: Skipping (already in dst): %v", getPathBase(img.file))
 		return
 	}
 
-	log.Printf("extractMatch: Extracting %v", pathBase(img.file))
+	log.Printf("extractMatch: Extracting %v", getPathBase(img.file))
 
 	r, err := os.Open(img.file)
 	check(err)
@@ -158,7 +158,7 @@ func main() {
 	log.Printf("Scanning %v...", srcDir)
 
 	for _, file := range find(srcDir, fileExts) {
-		img := newImg(file, exifKey, exifValWant)
+		img := newImage(file, exifKey, exifValWant)
 
 		wg.Add(2)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)

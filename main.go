@@ -14,18 +14,18 @@ import (
 )
 
 type Image struct {
-	file         string
-	exifKey      string
-	exifValWant  string
-	exifValFound string
+	file      string
+	exifKey   string
+	exifValue string
+	exifQuery string
 }
 
-func newImage(file, exifKey, exifValWant string) Image {
+func newImage(file, exifKey, exifQuery string) Image {
 	return Image{
-		file:         file,
-		exifKey:      exifKey,
-		exifValWant:  exifValWant,
-		exifValFound: "",
+		file:      file,
+		exifKey:   exifKey,
+		exifValue: "",
+		exifQuery: exifQuery,
 	}
 }
 
@@ -104,7 +104,7 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 		log.Printf("exifGetVal: %v: %v", getPathBase(img.file), err)
 	}
 
-	img.exifValFound = val
+	img.exifValue = val
 	imgChan <- img
 }
 
@@ -112,7 +112,7 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	img := <-imgChan
-	if !contains(img.exifValFound, img.exifValWant) {
+	if !contains(img.exifValue, img.exifQuery) {
 		return
 	}
 
@@ -137,17 +137,17 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 
 func main() {
 	var (
-		srcDir      = os.Getenv("SRC_DIR")
-		dstDir      = os.Getenv("DST_DIR")
-		exifKey     = os.Getenv("EXIF_KEY")
-		exifValWant = os.Getenv("EXIF_VAL")
-		fileExts    = []string{".jpg", ".jpeg"}
+		srcDir    = os.Getenv("SRC_DIR")
+		dstDir    = os.Getenv("DST_DIR")
+		exifKey   = os.Getenv("EXIF_KEY")
+		exifQuery = os.Getenv("EXIF_VAL")
+		fileExts  = []string{".jpg", ".jpeg"}
 
 		imgChan = make(chan Image)
 		wg      sync.WaitGroup
 	)
 
-	validateIsSet(srcDir, dstDir, exifKey, exifValWant)
+	validateIsSet(srcDir, dstDir, exifKey, exifQuery)
 	validateExists(srcDir, dstDir)
 
 	et, err := exiftool.NewExiftool()
@@ -158,7 +158,7 @@ func main() {
 	log.Printf("Scanning %v...", srcDir)
 
 	for _, file := range find(srcDir, fileExts) {
-		img := newImage(file, exifKey, exifValWant)
+		img := newImage(file, exifKey, exifQuery)
 
 		wg.Add(2)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)

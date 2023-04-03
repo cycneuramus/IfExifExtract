@@ -58,6 +58,16 @@ func validateExists(paths ...string) {
 	}
 }
 
+func parse(exifQuery string) []string {
+	exifQueries := strings.Split(exifQuery, ",")
+	var res []string
+	for _, str := range exifQueries {
+		res = append(res, strings.TrimSpace(str))
+	}
+
+	return res
+}
+
 func find(rootDir string, fileExts []string) []string {
 	var files []string
 
@@ -146,8 +156,8 @@ func main() {
 		os.Exit(1)
 	}
 	validateExists(srcDir, dstDir)
+	exifQueries := parse(exifQuery)
 
-	exifQueries := strings.Split(exifQuery, ",")
 	et, err := exiftool.NewExiftool()
 	check(err)
 	defer et.Close()

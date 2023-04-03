@@ -36,10 +36,6 @@ func check(err error) {
 	}
 }
 
-func contains(str, substr string) bool {
-	return strings.Contains(str, substr)
-}
-
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return !errors.Is(err, os.ErrNotExist)
@@ -101,7 +97,7 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 
 	match := 0
 	for _, q := range img.exifQueries {
-		if contains(img.exifValue, q) {
+		if strings.Contains(img.exifValue, q) {
 			match++
 		}
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io/fs"
 	"log"
 	"os"
@@ -14,35 +15,19 @@ import (
 )
 
 type Image struct {
-	file      string
-	exifKey   string
-	exifValue string
-	exifQuery string
+	file        string
+	exifKey     string
+	exifValue   string
+	exifQueries []string
 }
 
-func newImage(file, exifKey, exifQuery string) Image {
+func newImage(file, exifKey string, exifQueries []string) Image {
 	return Image{
-		file:      file,
-		exifKey:   exifKey,
-		exifValue: "",
-		exifQuery: exifQuery,
+		file:        file,
+		exifKey:     exifKey,
+		exifValue:   "",
+		exifQueries: exifQueries,
 	}
-}
-
-func joinPath(p1, p2 string) string {
-	return filepath.Join(p1, p2)
-}
-
-func getPathBase(p string) string {
-	return filepath.Base(p)
-}
-
-func getFileExt(p string) string {
-	return filepath.Ext(p)
-}
-
-func contains(str, substr string) bool {
-	return strings.Contains(str, substr)
 }
 
 func check(err error) {
@@ -51,9 +36,22 @@ func check(err error) {
 	}
 }
 
+func contains(str, substr string) bool {
+	return strings.Contains(str, substr)
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return !errors.Is(err, os.ErrNotExist)
+}
+
+func isSet(vars ...string) bool {
+	for _, v := range vars {
+		if v == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func validateExists(paths ...string) {
@@ -64,21 +62,13 @@ func validateExists(paths ...string) {
 	}
 }
 
-func validateIsSet(vars ...string) {
-	for _, v := range vars {
-		if v == "" {
-			log.Fatalf("Not set: %v", v)
-		}
-	}
-}
-
 func find(rootDir string, fileExts []string) []string {
 	var files []string
 
 	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
 		check(err)
 		for _, ext := range fileExts {
-			if getFileExt(xinfo.Name()) == ext {
+			if filepath.Ext(xinfo.Name()) == ext {
 				files = append(files, xpath)
 			}
 		}
@@ -92,17 +82,14 @@ func find(rootDir string, fileExts []string) []string {
 func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if exists(joinPath(dstDir, getPathBase(img.file))) {
-		log.Printf("exifGetVal: Skipping EXIF lookup (file already in dst): %v", getPathBase(img.file))
+	if exists(filepath.Join(dstDir, filepath.Base(img.file))) {
+		log.Printf("exifGetVal: Skipping EXIF lookup (file already in dst): %v", filepath.Base(img.file))
 		imgChan <- img
 		return
 	}
 
 	exif := et.ExtractMetadata(img.file)
-	val, err := exif[0].GetString(img.exifKey)
-	if err != nil {
-		log.Printf("exifGetVal: %v: %v", getPathBase(img.file), err)
-	}
+	val, _ := exif[0].GetString(img.exifKey)
 
 	img.exifValue = val
 	imgChan <- img
@@ -110,19 +97,25 @@ func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- 
 
 func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
-
 	img := <-imgChan
-	if !contains(img.exifValue, img.exifQuery) {
+
+	match := 0
+	for _, q := range img.exifQueries {
+		if contains(img.exifValue, q) {
+			match++
+		}
+	}
+	if match == 0 {
 		return
 	}
 
-	dst := joinPath(dstDir, getPathBase(img.file))
+	dst := filepath.Join(dstDir, filepath.Base(img.file))
 	if exists(dst) {
-		log.Printf("extractMatch: Skipping (already in dst): %v", getPathBase(img.file))
+		log.Printf("extractMatch: Skipping (already in dst): %v", filepath.Base(img.file))
 		return
 	}
 
-	log.Printf("extractMatch: Extracting %v", getPathBase(img.file))
+	log.Printf("extractMatch: Extracting %v", filepath.Base(img.file))
 
 	r, err := os.Open(img.file)
 	check(err)
@@ -137,19 +130,28 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 
 func main() {
 	var (
-		srcDir    = os.Getenv("SRC_DIR")
-		dstDir    = os.Getenv("DST_DIR")
-		exifKey   = os.Getenv("EXIF_KEY")
-		exifQuery = os.Getenv("EXIF_VAL")
+		srcDir    string
+		dstDir    string
+		exifKey   string
+		exifQuery string
 		fileExts  = []string{".jpg", ".jpeg"}
-
-		imgChan = make(chan Image)
-		wg      sync.WaitGroup
+		imgChan   = make(chan Image)
+		wg        sync.WaitGroup
 	)
 
-	validateIsSet(srcDir, dstDir, exifKey, exifQuery)
+	flag.StringVar(&srcDir, "srcDir", "", "Directory to scan")
+	flag.StringVar(&dstDir, "dstDir", "", "Directory to receive matching files")
+	flag.StringVar(&exifKey, "exifKey", "", "EXIF key to query")
+	flag.StringVar(&exifQuery, "exifQuery", "", "EXIF value to match")
+	flag.Parse()
+
+	if !isSet(srcDir, dstDir, exifKey, exifQuery) {
+		flag.Usage()
+		os.Exit(1)
+	}
 	validateExists(srcDir, dstDir)
 
+	exifQueries := strings.Split(exifQuery, ",")
 	et, err := exiftool.NewExiftool()
 	check(err)
 	defer et.Close()
@@ -158,7 +160,7 @@ func main() {
 	log.Printf("Scanning %v...", srcDir)
 
 	for _, file := range find(srcDir, fileExts) {
-		img := newImage(file, exifKey, exifQuery)
+		img := newImage(file, exifKey, exifQueries)
 
 		wg.Add(2)
 		go exifGetVal(img, dstDir, et, imgChan, &wg)

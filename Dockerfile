@@ -22,6 +22,6 @@ COPY go.sum .
 RUN go mod download
 
 COPY . .
-RUN go build
+RUN go build -buildvcs=false
 
 ENTRYPOINT ["sh", "entrypoint.sh"]

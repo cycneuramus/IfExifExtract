@@ -21,7 +21,7 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
-COPY . $HOME_DIR
+COPY . .
 RUN go build
 
 ENTRYPOINT ["sh", "entrypoint.sh"]

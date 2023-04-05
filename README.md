@@ -11,7 +11,7 @@ Usage of IfExifExtract:
   -exifKey string
     	EXIF key to query
   -exifQuery string
-    	EXIF value to match
+    	EXIF values to find (comma-separated)
   -srcDir string
     	Directory to scan
 ```

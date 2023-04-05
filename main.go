@@ -93,7 +93,7 @@ func isMatch(value string, queries []string) bool {
 		}
 	}
 
-	return match == 1
+	return match > 0
 }
 
 func copyFile(src, dst string) {

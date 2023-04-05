@@ -69,20 +69,19 @@ func parse(queryFlag string) []string {
 }
 
 func find(rootDir string, fileExts []string) []string {
-	var files []string
-
-	walker := func(xpath string, xinfo fs.DirEntry, err error) error {
+	var res []string
+	walker := func(path string, info fs.DirEntry, err error) error {
 		check(err)
 		for _, ext := range fileExts {
-			if filepath.Ext(xinfo.Name()) == ext {
-				files = append(files, xpath)
+			if filepath.Ext(info.Name()) == ext {
+				res = append(res, path)
 			}
 		}
 		return nil
 	}
 
 	filepath.WalkDir(rootDir, walker)
-	return files
+	return res
 }
 
 func isMatch(value string, queries []string) bool {

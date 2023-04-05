@@ -5,9 +5,7 @@ ENV GOARCH $TARGETARCH
 ARG USER=extractor
 ARG HOME_DIR=/home/$USER
 
-RUN apk add --no-cache --update \
-	git \
-	exiftool
+RUN apk add --no-cache --update exiftool
 
 RUN adduser \
 	--disabled-password \

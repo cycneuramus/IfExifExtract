@@ -58,8 +58,8 @@ func validateExists(paths ...string) {
 	}
 }
 
-func parse(exifQuery string) []string {
-	exifQueries := strings.Split(exifQuery, ",")
+func parse(queryFlag string) []string {
+	exifQueries := strings.Split(queryFlag, ",")
 	var res []string
 	for _, str := range exifQueries {
 		res = append(res, strings.TrimSpace(str))
@@ -85,6 +85,29 @@ func find(rootDir string, fileExts []string) []string {
 	return files
 }
 
+func isMatch(value string, queries []string) bool {
+	match := 0
+	for _, q := range queries {
+		if strings.Contains(value, q) {
+			match++
+		}
+	}
+
+	return match == 1
+}
+
+func copyFile(src, dst string) {
+	r, err := os.Open(src)
+	check(err)
+	defer r.Close()
+
+	w, err := os.Create(dst)
+	check(err)
+	defer w.Close()
+
+	w.ReadFrom(r)
+}
+
 func exifGetVal(img Image, dstDir string, et *exiftool.Exiftool, imgChan chan<- Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -105,13 +128,7 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	defer wg.Done()
 	img := <-imgChan
 
-	match := 0
-	for _, q := range img.exifQueries {
-		if strings.Contains(img.exifValue, q) {
-			match++
-		}
-	}
-	if match == 0 {
+	if !isMatch(img.exifValue, img.exifQueries) {
 		return
 	}
 
@@ -122,16 +139,7 @@ func extractMatch(dstDir string, imgChan <-chan Image, wg *sync.WaitGroup) {
 	}
 
 	log.Printf("extractMatch: Extracting %v", filepath.Base(img.file))
-
-	r, err := os.Open(img.file)
-	check(err)
-	defer r.Close()
-
-	w, err := os.Create(dst)
-	check(err)
-	defer w.Close()
-
-	w.ReadFrom(r)
+	copyFile(img.file, dst)
 }
 
 func main() {
@@ -148,7 +156,7 @@ func main() {
 	flag.StringVar(&srcDir, "srcDir", "", "Directory to scan")
 	flag.StringVar(&dstDir, "dstDir", "", "Directory to receive matching files")
 	flag.StringVar(&exifKey, "exifKey", "", "EXIF key to query")
-	flag.StringVar(&exifQuery, "exifQuery", "", "EXIF value to match")
+	flag.StringVar(&exifQuery, "exifQuery", "", "EXIF values to find (comma-separated)")
 	flag.Parse()
 
 	if !isSet(srcDir, dstDir, exifKey, exifQuery) {

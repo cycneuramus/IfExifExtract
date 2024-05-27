@@ -85,14 +85,13 @@ func find(rootDir string, fileExts []string) []string {
 }
 
 func isMatch(value string, queries []string) bool {
-	match := 0
 	for _, q := range queries {
 		if strings.Contains(value, q) {
-			match++
+			return true
 		}
 	}
 
-	return match > 0
+	return false
 }
 
 func copyFile(src, dst string) {
